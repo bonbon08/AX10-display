@@ -1,12 +1,11 @@
-import pygame
+from tkinter import *
 import socket
-import threading
 
 def wait_on_connection():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind(("127.0.0.1", 44523))
     server_socket.listen(1)
-    print("Server waiting on incomig connection")
+    print("Server waiting on incoming connection")
     conn, address = server_socket.accept()
     print("Connection established")
     return [conn, server_socket]
@@ -18,12 +17,13 @@ def hex_to_rgb(hex_code):
     return (r, g, b)
 
 class Screen():
+    def __init__(self):
+        self.window = Tk()
+        self.canvas_place = Canvas(self.window, width=255, height=255, bd=0, highlightthickness=0, relief='ridge')
+        self.canvas_place.pack()
+        self.clear()
     def clear(self):
-        self.disp.fill("black")
-        pygame.display.flip()
-    def set_pixel(self,x,y,rgb):
-        self.disp.set_at((x, y), hex_to_rgb(rgb))
-        pygame.display.flip()
+        self.canvas_place.create_rectangle(0, 0, 255, 255, fill="#000000", outline="#000000")
     def set_char(self,x,y,char):
         index1 = 0
         index2 = 0
@@ -35,29 +35,28 @@ class Screen():
             index2 = 0
             index1 += 1
         pygame.display.flip()
-    def sync_screen(self, displiste):
-        self.disp = pygame.init()
-        pygame.display.set_mode((255, 255))
-        pygame.display.set_caption("AX-10 display")
-        self.clock = pygame.time.Clock()
-        conn = displiste[0]
-        server_socket = displiste[1]
-        display = Screen()
+
+    def sync_screen(self, conn):
+        allcoms = []
         while True:
-            commandslist = conn.recv(1024).decode("utf-8").split(" ")
-            if commandslist[0] == "0":
-                display.clear()
-            elif commandslist[0] == "1":
-                display.set_pixel(commandslist[1], commandslist[2], commandslist[3])
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    print("Screen closed")
-                    pygame.quit()
-                    break
-            pygame.display.flip()
-        conn.close()
-        server_socket.close()
+            try:
+                commandstring = conn.recv(2048).decode("utf-8")
+                allcoms.append(commandstring)
+                if allcoms != [""]:
+                    while len(allcoms) > 0:
+                        commandstring = allcoms.pop().split("!")
+                        for command in commandstring:
+                            commandslist = command.split(" ")
+                            if commandslist[0] == "0" and commandslist[1] == "0" and commandslist[3] == "0":
+                                self.clear()
+                            elif commandslist[0] == "1":
+                                self.canvas_place.create_rectangle(int(commandslist[1]), int(commandslist[2]), (int(commandslist[1])+1), (int(commandslist[2])+1), fill="#"+commandslist[3], outline="#"+commandslist[3])
+                            self.window.update()
+            except Exception as error:
+                print(error)
 
 if __name__ == "__main__":
     screen = Screen()
-    screen.sync_screen(wait_on_connection())
+    conn, server_socket = wait_on_connection()
+    screen.sync_screen(conn)
+    pygame.quit()
